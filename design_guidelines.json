@@ -1,0 +1,122 @@
+{
+  "theme": "dark",
+  "archetype": "5 (Luxury / Editorial)",
+  "vibe": "Moody, literary, cinematic, late-night writing, ink on parchment.",
+  "colors": {
+    "background": "#0F0F11",
+    "background_alt": "#161618",
+    "surface": "#1E1E20",
+    "surface_glass": "rgba(15, 15, 17, 0.7)",
+    "text_primary": "#F2EBE3",
+    "text_secondary": "#A8A39D",
+    "primary": "#8A2E3B",
+    "primary_hover": "#A13645",
+    "accent": "#C4A47C",
+    "border": "#2A2A2C",
+    "success": "#3A5A40",
+    "warning": "#B87A3D",
+    "error": "#7A2E2E"
+  },
+  "typography": {
+    "font_heading": "'Cormorant Garamond', serif",
+    "font_body": "'Lora', serif",
+    "font_mono": "'JetBrains Mono', monospace",
+    "h1": "text-5xl sm:text-6xl+ font-light tracking-tighter leading-none",
+    "h2": "text-4xl sm:text-5xl font-light tracking-tight leading-none",
+    "h3": "text-2xl sm:text-3xl font-medium tracking-tight",
+    "h4": "text-lg sm:text-xl font-medium uppercase tracking-[0.2em]",
+    "body": "text-base sm:text-lg leading-relaxed text-text_secondary",
+    "reader_body": "text-xl sm:text-2xl leading-[2] tracking-wide text-text_primary max-w-prose mx-auto"
+  },
+  "spacing": {
+    "container_padding": "p-8 md:p-16 lg:p-24",
+    "section_gap": "gap-16 md:gap-32",
+    "element_gap": "gap-6 md:gap-8"
+  },
+  "surfaces_and_borders": {
+    "glass_header": "backdrop-blur-2xl bg-[#0F0F11]/70 border-b border-white/5",
+    "card_flat": "bg-[#161618] border border-white/5 shadow-sm rounded-none",
+    "card_hover": "hover:-translate-y-1 hover:shadow-[0_8px_32px_rgba(196,164,124,0.1)] transition-all duration-300",
+    "bento_grid": "grid grid-cols-1 md:grid-cols-4 lg:grid-cols-12 gap-6"
+  },
+  "components": {
+    "Hero": {
+      "layout": "Asymmetric split or center-aligned with massive typography and generous negative space.",
+      "cta": "Prominent 'Brain Dump' button using the primary color (#8A2E3B) with a subtle glow.",
+      "background": "Dark charcoal with a subtle, dark-academia themed background image overlay (max 20% opacity) or noise texture."
+    },
+    "Brain_Dump_Composer": {
+      "container": "Max-w-4xl mx-auto, border border-white/10 p-8 md:p-12 bg-[#161618]/50 backdrop-blur-sm",
+      "textarea": "Massive text area, borderless, text-2xl font-body leading-relaxed, placeholder text subtle",
+      "controls": "Bottom bar containing a voice recording button (lucide-react mic icon) and a Shadcn slider for 'De-AI-fy' vocabulary level."
+    },
+    "Story_Vibe_Selector": {
+      "layout": "Grid of visual cards (grid-cols-1 sm:grid-cols-2 lg:grid-cols-4)",
+      "cards": "Each card has a distinct mood overlay. Dark & Gritty (Black/Crimson), Poetic Slow-Burn (Deep Emerald), Fast-Paced Thriller (High-contrast Indigo), Cozy Nostalgic (Warm Amber). Use CSS gradients or muted images.",
+      "interaction": "On hover, the card image scales up slightly and border turns to accent color (#C4A47C)."
+    },
+    "Story_Reader_View": {
+      "layout": "Centered, distraction-free. Max-w-prose (approx 65ch).",
+      "typography": "Reader_body styling (large Lora font, double spacing).",
+      "controls": "'Continue Story' button at the bottom. Floating or sticky bottom bar for Co-Author mode."
+    },
+    "Co_Author_Mode": {
+      "layout": "Shadcn Dialog or a floating command-palette style input (Shadcn Command/Popover) mid-story to inject directives.",
+      "typography": "Use font_mono for directives to distinguish from the literary story text."
+    },
+    "Character_Lore_Locker": {
+      "layout": "Shadcn Sheet sliding from the right.",
+      "content": "List of character cards and lore snippets. Dark, dense layout using the bento grid protocol internally."
+    },
+    "Digital_Bookshelf": {
+      "layout": "Bento Grid Protocol (Mode A: Tetris Grid). Mix of large featured stories and smaller saved stories.",
+      "aesthetic": "Book-spine aesthetic using vertical text or tall narrow cards (col-span-2 row-span-4)."
+    },
+    "Daily_Prompts": {
+      "layout": "A distinctly styled card, maybe with a parchment texture background, standing out from the dark theme."
+    }
+  },
+  "image_urls": {
+    "hero_background": {
+      "url": "https://images.pexels.com/photos/8717959/pexels-photo-8717959.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Aesthetic flat lay with typewriter and rustic elements, use as hero background with heavy dark overlay (opacity 10-15%)."
+    },
+    "vibe_dark_gritty": {
+      "url": "https://images.unsplash.com/photo-1728506972831-193841eb2961?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1OTV8MHwxfHNlYXJjaHw0fHxkYXJrJTIwYWNhZGVtaWElMjBhZXN0aGV0aWN8ZW58MHx8fHwxNzgxMDgyNjMyfDA&ixlib=rb-4.1.0&q=85",
+      "description": "Dark room filled with books, for 'Dark & Gritty' vibe card."
+    },
+    "vibe_poetic": {
+      "url": "https://images.unsplash.com/photo-1665245360851-fc7545c3aff0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1OTV8MHwxfHNlYXJjaHwxfHxkYXJrJTIwYWNhZGVtaWElMjBhZXN0aGV0aWN8ZW58MHx8fHwxNzgxMDgyNjMyfDA&ixlib=rb-4.1.0&q=85",
+      "description": "Lake surrounded by trees in autumn, for 'Poetic Slow-Burn' vibe card."
+    },
+    "vibe_nostalgic": {
+      "url": "https://images.pexels.com/photos/17042498/pexels-photo-17042498.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Vintage magical journal with dry leaf, for 'Cozy Nostalgic' vibe card."
+    },
+    "texture_parchment": {
+      "url": "https://images.pexels.com/photos/235985/pexels-photo-235985.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Vintage parchment texture, use for Daily Prompt card or subtle UI accents."
+    }
+  },
+  "dependencies": {
+    "icons": "lucide-react",
+    "animations": "framer-motion",
+    "scroll": "lenis",
+    "fonts": [
+      "@fontsource/cormorant-garamond",
+      "@fontsource/lora",
+      "@fontsource/jetbrains-mono"
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Strictly adhere to the dark luxury theme. DO NOT use generic fonts like Inter, Roboto, or Space Grotesk. Always use Cormorant Garamond for headings and Lora for body.",
+    "Implement Lenis for smooth scrolling.",
+    "Ensure all interactive elements have data-testid attributes.",
+    "For the Brain Dump composer, use a Shadcn Slider for the 'De-AI-fy' level and integrate a clear Voice recording button.",
+    "The Story Reader view must be distraction-free with generous line height and max-width.",
+    "Implement the Co-Author mode as a floating UI (e.g., Shadcn Dialog/Popover) that does not break the reading flow.",
+    "The Character & Lore Locker should be a Shadcn Sheet accessible from the Reader view.",
+    "The Digital Bookshelf should utilize the Bento grid protocol with book-spine vertical aesthetics where possible.",
+    "Never use pure black or white. Use the tinted shades defined in the colors object."
+  ]
+}

@@ -5,7 +5,9 @@ Brain Dump → immersive literary fiction via Claude Sonnet 4.5.
 
 import os
 import io
+import json
 import uuid
+import base64
 import logging
 import asyncio
 import random
@@ -16,14 +18,15 @@ from typing import Annotated, List, Optional
 import jwt
 import bcrypt
 from dotenv import load_dotenv
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, EmailStr, BeforeValidator
 from bson import ObjectId
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
 from emergentintegrations.llm.openai import OpenAISpeechToText
 
 # ----------------------------------------------------------------------------
@@ -102,6 +105,10 @@ class StoryContinueRequest(BaseModel):
 class StoryShareRequest(BaseModel):
     story_id: str
     share: bool
+
+
+class ChunkEditRequest(BaseModel):
+    text: str = Field(min_length=1)
 
 
 class CharacterIn(BaseModel):
@@ -328,10 +335,12 @@ Complete fragments using deep imagination. Apply ALL rules strictly. End on a ho
         "characters": req.characters or [],
         "lore": req.lore or "",
         "is_public": False,
+        "cover_status": "pending",
         "created_at": now_utc_iso(),
         "updated_at": now_utc_iso(),
     }
     await db.stories.insert_one(doc)
+    asyncio.create_task(_generate_cover_bg(story_id, title, req.vibe))
     doc.pop("_id", None)
     return doc
 
@@ -377,15 +386,262 @@ End on a hook or held breath."""
     return story
 
 
+# ----------------------------------------------------------------------------
+# Streaming generation (SSE) + Cover art (Nano Banana) + Chunk editing
+# ----------------------------------------------------------------------------
+VIBE_COVER_HINTS = {
+    "dark_gritty":       "noir tones, deep crimson and black, shadows, oil-painting feel, brutalist",
+    "poetic_slow_burn":  "muted emerald and bone, moody chiaroscuro, soft late-afternoon light, painterly",
+    "thriller":          "high-contrast indigo and silver, urban tension, cinematic, sharp shadows",
+    "cozy_nostalgic":    "warm amber and ochre, candlelight, soft grain, autumn melancholy, vintage paper",
+}
+
+
+async def _generate_cover_bg(story_id: str, title: str, vibe: str):
+    """Background task: generate a literary cover via Nano Banana and store as base64 PNG."""
+    hint = VIBE_COVER_HINTS.get(vibe, "muted, atmospheric, literary")
+    prompt = (
+        f"A square literary novel cover illustration, NO TEXT, no letters, no words. "
+        f"Mood: {hint}. Subject is abstract/atmospheric and evokes the title \"{title}\". "
+        f"Painterly, textured, dark academia aesthetic, slightly grainy. "
+        f"Composition leaves negative space for typography to be added later. "
+        f"Avoid any human faces. Style: oil on linen, museum-quality."
+    )
+    try:
+        chat = (
+            LlmChat(
+                api_key=EMERGENT_LLM_KEY,
+                session_id=f"cover-{story_id}",
+                system_message="You generate literary book cover art.",
+            )
+            .with_model("gemini", "gemini-3.1-flash-image-preview")
+            .with_params(modalities=["image", "text"])
+        )
+        _text, images = await chat.send_message_multimodal_response(UserMessage(text=prompt))
+        if images:
+            b64 = images[0]["data"]
+            mime = images[0].get("mime_type", "image/png")
+            await db.stories.update_one(
+                {"id": story_id},
+                {"$set": {"cover_b64": b64, "cover_mime": mime, "cover_status": "ready"}},
+            )
+            logger.info("Cover ready for story %s", story_id)
+        else:
+            await db.stories.update_one(
+                {"id": story_id}, {"$set": {"cover_status": "failed"}}
+            )
+    except Exception:
+        logger.exception("Cover generation failed for %s", story_id)
+        await db.stories.update_one(
+            {"id": story_id}, {"$set": {"cover_status": "failed"}}
+        )
+
+
+def _sse_event(payload: dict) -> str:
+    return f"data: {json.dumps(payload)}\n\n"
+
+
+@api.post("/story/generate/stream")
+async def story_generate_stream(
+    req: StoryGenerateRequest,
+    bg: BackgroundTasks,
+    u: dict = Depends(current_user),
+):
+    story_id = str(uuid.uuid4())
+    system_prompt = build_system_prompt(
+        req.vibe, req.deai_level, req.characters, req.lore
+    )
+    user_msg = f"""[USER'S RAW BRAIN DUMP]
+\"\"\"{req.brain_dump}\"\"\"
+
+TASK: Write the captivating OPENING SCENE (250–350 words) based on this dump.
+Complete fragments using deep imagination. Apply ALL rules strictly. End on a hook."""
+
+    title = (req.title or req.brain_dump[:60].strip().rstrip(".,!?") + "…").strip()
+
+    # Create the story doc up-front so the client can navigate to it immediately.
+    doc = {
+        "id": story_id,
+        "user_id": u["id"],
+        "title": title,
+        "vibe": req.vibe,
+        "deai_level": req.deai_level,
+        "brain_dump": req.brain_dump,
+        "chunks": [],
+        "characters": req.characters or [],
+        "lore": req.lore or "",
+        "is_public": False,
+        "cover_status": "pending",
+        "created_at": now_utc_iso(),
+        "updated_at": now_utc_iso(),
+    }
+    await db.stories.insert_one(doc)
+
+    async def event_gen():
+        yield _sse_event({"type": "meta", "story_id": story_id, "title": title})
+        full = []
+        try:
+            chat = LlmChat(
+                api_key=EMERGENT_LLM_KEY,
+                session_id=story_id,
+                system_message=system_prompt,
+            ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+            async for ev in chat.stream_message(UserMessage(text=user_msg)):
+                if isinstance(ev, TextDelta):
+                    full.append(ev.content)
+                    yield _sse_event({"type": "delta", "text": ev.content})
+                elif isinstance(ev, StreamDone):
+                    break
+        except Exception as e:
+            logger.exception("Stream generation failed")
+            yield _sse_event({"type": "error", "message": str(e)})
+            return
+
+        prose = "".join(full).strip()
+        chunk = {"text": prose, "created_at": now_utc_iso(), "directive": None}
+        await db.stories.update_one(
+            {"id": story_id},
+            {"$push": {"chunks": chunk}, "$set": {"updated_at": now_utc_iso()}},
+        )
+        # Kick off cover art as a fire-and-forget task (not blocking client).
+        asyncio.create_task(_generate_cover_bg(story_id, title, req.vibe))
+        yield _sse_event({"type": "done", "story_id": story_id})
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
+    )
+
+
+@api.post("/story/continue/stream")
+async def story_continue_stream(
+    req: StoryContinueRequest, u: dict = Depends(current_user)
+):
+    story = await db.stories.find_one({"id": req.story_id, "user_id": u["id"]})
+    if not story:
+        raise HTTPException(404, "Story not found")
+
+    system_prompt = build_system_prompt(
+        story["vibe"], story["deai_level"], story.get("characters"), story.get("lore")
+    )
+    prior = "\n\n".join(c["text"] for c in story["chunks"])
+    directive_text = (
+        f"\n\n[CO-AUTHOR DIRECTIVE FROM THE WRITER]:\n{req.coauthor_directive.strip()}\n"
+        if req.coauthor_directive
+        else ""
+    )
+    user_msg = f"""[STORY SO FAR]
+\"\"\"{prior}\"\"\"
+{directive_text}
+TASK: Continue the story with the NEXT scene chunk (250–350 words).
+Do not repeat what came before. Maintain voice, vibe, character consistency.
+End on a hook or held breath."""
+
+    async def event_gen():
+        yield _sse_event({"type": "meta", "story_id": req.story_id})
+        full = []
+        try:
+            chat = LlmChat(
+                api_key=EMERGENT_LLM_KEY,
+                session_id=req.story_id,
+                system_message=system_prompt,
+            ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+            async for ev in chat.stream_message(UserMessage(text=user_msg)):
+                if isinstance(ev, TextDelta):
+                    full.append(ev.content)
+                    yield _sse_event({"type": "delta", "text": ev.content})
+                elif isinstance(ev, StreamDone):
+                    break
+        except Exception as e:
+            logger.exception("Stream continue failed")
+            yield _sse_event({"type": "error", "message": str(e)})
+            return
+
+        prose = "".join(full).strip()
+        chunk = {
+            "text": prose,
+            "created_at": now_utc_iso(),
+            "directive": req.coauthor_directive,
+        }
+        await db.stories.update_one(
+            {"id": req.story_id},
+            {"$push": {"chunks": chunk}, "$set": {"updated_at": now_utc_iso()}},
+        )
+        yield _sse_event({"type": "done", "story_id": req.story_id})
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
+    )
+
+
+@api.patch("/story/{story_id}/chunks/{idx}")
+async def story_edit_chunk(
+    story_id: str,
+    idx: int,
+    req: ChunkEditRequest,
+    u: dict = Depends(current_user),
+):
+    story = await db.stories.find_one({"id": story_id, "user_id": u["id"]})
+    if not story:
+        raise HTTPException(404, "Story not found")
+    if idx < 0 or idx >= len(story.get("chunks", [])):
+        raise HTTPException(400, "Chunk index out of range")
+    await db.stories.update_one(
+        {"id": story_id},
+        {
+            "$set": {
+                f"chunks.{idx}.text": req.text.strip(),
+                f"chunks.{idx}.edited_at": now_utc_iso(),
+                "updated_at": now_utc_iso(),
+            }
+        },
+    )
+    fresh = await db.stories.find_one({"id": story_id}, {"_id": 0})
+    return fresh
+
+
+@api.post("/story/{story_id}/cover/regenerate")
+async def story_cover_regenerate(
+    story_id: str, bg: BackgroundTasks, u: dict = Depends(current_user)
+):
+    story = await db.stories.find_one({"id": story_id, "user_id": u["id"]})
+    if not story:
+        raise HTTPException(404, "Story not found")
+    await db.stories.update_one(
+        {"id": story_id}, {"$set": {"cover_status": "pending", "cover_b64": None}}
+    )
+    asyncio.create_task(_generate_cover_bg(story_id, story["title"], story["vibe"]))
+    return {"ok": True, "cover_status": "pending"}
+
+
+@api.get("/story/{story_id}/cover")
+async def story_cover_status(story_id: str, u: dict = Depends(current_user)):
+    """Lightweight polling endpoint that returns ONLY cover state — never the chunks/text."""
+    story = await db.stories.find_one(
+        {"id": story_id, "$or": [{"user_id": u["id"]}, {"is_public": True}]},
+        {"_id": 0, "cover_status": 1, "cover_b64": 1, "cover_mime": 1},
+    )
+    if not story:
+        raise HTTPException(404, "Story not found")
+    return story
+
+
 @api.get("/story/library")
 async def story_library(u: dict = Depends(current_user)):
-    cursor = db.stories.find({"user_id": u["id"]}, {"_id": 0}).sort("updated_at", -1)
+    cursor = db.stories.find(
+        {"user_id": u["id"]},
+        {"_id": 0, "cover_b64": 0},  # exclude heavy cover image from list
+    ).sort("updated_at", -1)
     items = await cursor.to_list(500)
     # trim chunks for list view
     for s in items:
         s["preview"] = s["chunks"][0]["text"][:200] if s.get("chunks") else ""
         s["chunk_count"] = len(s.get("chunks", []))
         s["word_count"] = sum(len(c["text"].split()) for c in s.get("chunks", []))
+        s["has_cover"] = s.get("cover_status") == "ready"
     return items
 
 
@@ -440,7 +696,9 @@ async def story_export(story_id: str, fmt: str = "md", u: dict = Depends(current
 # ----------------------------------------------------------------------------
 @api.get("/community/feed")
 async def community_feed(u: dict = Depends(current_user)):
-    cursor = db.stories.find({"is_public": True}, {"_id": 0}).sort("updated_at", -1).limit(60)
+    cursor = db.stories.find(
+        {"is_public": True}, {"_id": 0, "cover_b64": 0}
+    ).sort("updated_at", -1).limit(60)
     items = await cursor.to_list(60)
     # attach author display names
     uids = list({s["user_id"] for s in items})
@@ -450,6 +708,7 @@ async def community_feed(u: dict = Depends(current_user)):
         s["author"] = name_map.get(s["user_id"], "Anonymous")
         s["preview"] = s["chunks"][0]["text"][:240] if s.get("chunks") else ""
         s["chunk_count"] = len(s.get("chunks", []))
+        s["has_cover"] = s.get("cover_status") == "ready"
     return items
 
 

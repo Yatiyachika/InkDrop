@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
+import CoverThumb from "../components/CoverThumb";
 
 export default function Community() {
   const nav = useNavigate();
@@ -31,19 +32,23 @@ export default function Community() {
               <button
                 key={s.id}
                 onClick={() => nav(`/read/${s.id}`)}
-                className="ink-card text-left"
+                className="ink-card text-left flex gap-5 items-start"
                 data-testid={`community-story-${s.id}`}
               >
-                <div className="flex items-baseline justify-between mb-2">
-                  <p className="eyebrow text-[var(--ink-accent)]">{s.vibe.replace(/_/g, " ")}</p>
-                  <p className="mono text-[0.65rem] text-[var(--ink-text-2)] uppercase tracking-[0.2em]">{s.chunk_count} ch</p>
+                <div className="w-28 aspect-[3/4] flex-shrink-0 border border-[var(--ink-border)] overflow-hidden">
+                  <CoverThumb storyId={s.id} hasCover={s.has_cover} vibe={s.vibe} />
                 </div>
-                <p className="display text-3xl leading-tight mb-2">{s.title}</p>
-                <p className="mono text-[0.65rem] uppercase tracking-[0.22em] text-[var(--ink-text-2)] mb-4">
-                  by <em className="not-italic text-[var(--ink-text)]">{s.author}</em>
-                </p>
-                <p className="text-[var(--ink-text-2)] italic leading-relaxed line-clamp-4">{s.preview}…</p>
-                <p className="mt-4 mono text-[0.65rem] uppercase tracking-[0.2em] text-[var(--ink-accent)]">Read →</p>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline justify-between mb-2">
+                    <p className="eyebrow text-[var(--ink-accent)] truncate">{s.vibe.replace(/_/g, " ")}</p>
+                    <p className="mono text-[0.65rem] text-[var(--ink-text-2)] uppercase tracking-[0.2em] flex-shrink-0 ml-2">{s.chunk_count} ch</p>
+                  </div>
+                  <p className="display text-2xl leading-tight mb-2 line-clamp-2">{s.title}</p>
+                  <p className="mono text-[0.65rem] uppercase tracking-[0.22em] text-[var(--ink-text-2)] mb-3">
+                    by <em className="not-italic text-[var(--ink-text)]">{s.author}</em>
+                  </p>
+                  <p className="text-[var(--ink-text-2)] italic leading-relaxed line-clamp-3 text-sm">{s.preview}…</p>
+                </div>
               </button>
             ))}
           </div>

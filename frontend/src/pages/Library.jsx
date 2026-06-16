@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
+import CoverThumb from "../components/CoverThumb";
 
 export default function Library() {
   const nav = useNavigate();
@@ -26,22 +27,24 @@ export default function Library() {
             <button onClick={() => nav("/compose")} className="btn-primary mt-4" data-testid="library-empty-cta">Press your first story →</button>
           </div>
         ) : (
-          <div className="mt-12 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+          <div className="mt-12 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {stories.map((s) => (
               <button
                 key={s.id}
                 onClick={() => nav(`/read/${s.id}`)}
-                className="book-spine text-left"
+                className="group text-left flex flex-col"
                 data-testid={`library-story-${s.id}`}
               >
-                <div>
-                  <p className="eyebrow text-[var(--ink-accent)]">{s.vibe.replace(/_/g, " ")}</p>
-                  <p className="display text-2xl mt-2 leading-tight">{s.title}</p>
-                  {s.is_public && <span className="mono text-[0.55rem] mt-2 inline-block text-[var(--ink-accent)] uppercase tracking-[0.25em]">shared</span>}
+                <div className="aspect-[3/4] border border-[var(--ink-border)] overflow-hidden group-hover:border-[var(--ink-accent)] transition relative">
+                  <CoverThumb storyId={s.id} hasCover={s.has_cover} vibe={s.vibe} />
+                  {s.is_public && (
+                    <span className="absolute top-2 right-2 mono text-[0.55rem] bg-[#0F0F11]/80 backdrop-blur px-2 py-1 text-[var(--ink-accent)] uppercase tracking-[0.25em]">shared</span>
+                  )}
                 </div>
-                <div>
-                  <p className="text-xs text-[var(--ink-text-2)] line-clamp-3 italic mb-3">{s.preview}…</p>
-                  <p className="mono text-[0.6rem] uppercase tracking-[0.2em] text-[var(--ink-text-2)]">
+                <div className="mt-3">
+                  <p className="eyebrow text-[var(--ink-accent)]">{s.vibe.replace(/_/g, " ")}</p>
+                  <p className="display text-xl mt-1 leading-tight">{s.title}</p>
+                  <p className="mono text-[0.6rem] uppercase tracking-[0.2em] text-[var(--ink-text-2)] mt-2">
                     {s.word_count} w · {s.chunk_count} ch
                   </p>
                 </div>

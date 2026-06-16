@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Mic, Square, Plus, X, BookOpen } from "lucide-react";
-import api from "../lib/api";
+import api, { API } from "../lib/api";
+import { streamSSE } from "../lib/stream";
 
 const VIBES = [
   { id: "dark_gritty",       title: "Dark & Gritty",      desc: "noir, raw, unflinching",  img: "https://images.unsplash.com/photo-1728506972831-193841eb2961?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1OTV8MHwxfHNlYXJjaHw0fHxkYXJrJTIwYWNhZGVtaWElMjBhZXN0aGV0aWN8ZW58MHx8fHwxNzgxMDgyNjMyfDA&ixlib=rb-4.1.0&q=85" },
@@ -20,6 +21,8 @@ export default function Compose() {
   const [newChar, setNewChar] = useState({ name: "", role: "", description: "" });
   const [showCharForm, setShowCharForm] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [streamedText, setStreamedText] = useState("");
+  const [streamedStoryId, setStreamedStoryId] = useState(null);
   const [error, setError] = useState("");
 
   // voice recording
@@ -89,18 +92,34 @@ export default function Compose() {
       return;
     }
     setGenerating(true);
+    setStreamedText("");
+    setStreamedStoryId(null);
     try {
-      const r = await api.post("/story/generate", {
-        brain_dump: brainDump,
-        vibe,
-        deai_level: deai,
-        characters,
-        lore: "",
-      });
-      nav(`/read/${r.data.id}`);
+      await streamSSE(
+        `${API}/story/generate/stream`,
+        {
+          brain_dump: brainDump,
+          vibe,
+          deai_level: deai,
+          characters,
+          lore: "",
+        },
+        (ev) => {
+          if (ev.type === "meta") {
+            setStreamedStoryId(ev.story_id);
+          } else if (ev.type === "delta") {
+            setStreamedText((prev) => prev + ev.text);
+          } else if (ev.type === "done") {
+            // small grace pause so the reader sees the final tail land
+            setTimeout(() => nav(`/read/${ev.story_id}`), 900);
+          } else if (ev.type === "error") {
+            setError(ev.message || "Generation failed.");
+            setGenerating(false);
+          }
+        }
+      );
     } catch (e) {
-      setError(e.response?.data?.detail || "Generation failed.");
-    } finally {
+      setError(e.message || "Generation failed.");
       setGenerating(false);
     }
   };
@@ -231,6 +250,29 @@ export default function Compose() {
             {generating ? <>Pressing <span className="dot-pulse"><span/><span/><span/></span></> : "Press the Opening Scene →"}
           </button>
         </div>
+
+        {/* Live streaming overlay */}
+        {generating && (
+          <div className="fixed inset-0 z-50 bg-[#0F0F11]/95 backdrop-blur-2xl overflow-y-auto" data-testid="stream-overlay">
+            <div className="max-w-3xl mx-auto px-6 py-16">
+              <div className="flex items-center justify-between mb-10">
+                <p className="eyebrow">the press is running</p>
+                <span className="dot-pulse"><span/><span/><span/></span>
+              </div>
+              <p className="display text-4xl md:text-5xl mb-12 italic" data-testid="stream-title">
+                Watching the sentences arrive…
+              </p>
+              <div className="prose-novel" data-testid="stream-prose">
+                {streamedText.split(/\n\n+/).map((p, i) => (
+                  <p key={i}>{p}<span className="animate-pulse text-[var(--ink-accent)]">▊</span></p>
+                ))}
+                {streamedText.length === 0 && (
+                  <p className="italic text-[var(--ink-text-2)]">Claude is reaching for the first word…</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

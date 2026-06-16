@@ -18,7 +18,7 @@ from typing import Annotated, List, Optional
 import jwt
 import bcrypt
 from dotenv import load_dotenv
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form, BackgroundTasks
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.cors import CORSMiddleware
@@ -108,7 +108,7 @@ class StoryShareRequest(BaseModel):
 
 
 class ChunkEditRequest(BaseModel):
-    text: str = Field(min_length=1)
+    text: str = Field(min_length=1, max_length=10000)
 
 
 class CharacterIn(BaseModel):
@@ -444,7 +444,6 @@ def _sse_event(payload: dict) -> str:
 @api.post("/story/generate/stream")
 async def story_generate_stream(
     req: StoryGenerateRequest,
-    bg: BackgroundTasks,
     u: dict = Depends(current_user),
 ):
     story_id = str(uuid.uuid4())
@@ -605,13 +604,14 @@ async def story_edit_chunk(
 
 @api.post("/story/{story_id}/cover/regenerate")
 async def story_cover_regenerate(
-    story_id: str, bg: BackgroundTasks, u: dict = Depends(current_user)
+    story_id: str, u: dict = Depends(current_user)
 ):
     story = await db.stories.find_one({"id": story_id, "user_id": u["id"]})
     if not story:
         raise HTTPException(404, "Story not found")
     await db.stories.update_one(
-        {"id": story_id}, {"$set": {"cover_status": "pending", "cover_b64": None}}
+        {"id": story_id},
+        {"$set": {"cover_status": "pending", "cover_b64": None, "cover_mime": None}},
     )
     asyncio.create_task(_generate_cover_bg(story_id, story["title"], story["vibe"]))
     return {"ok": True, "cover_status": "pending"}

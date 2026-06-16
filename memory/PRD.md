@@ -34,7 +34,7 @@ Build an "elite ghostwriter" web app that turns a user's raw "Brain Dump" (fragm
 10. Community Salon (public-shared stories)
 11. Export Markdown / Plain Text
 
-## Implementation Status — 2026-01-11
+## Implementation Status — 2026-01-16 (iteration 2)
 - [x] JWT auth (signup/login/me) with bcrypt + idempotent email index
 - [x] Story generate/continue (Claude Sonnet 4.5, multi-turn session_id reuse)
 - [x] Story library, get, delete, share, export
@@ -44,19 +44,21 @@ Build an "elite ghostwriter" web app that turns a user's raw "Brain Dump" (fragm
 - [x] Community feed endpoint
 - [x] Landing, Auth, Dashboard, Compose, Reader, Library, Community pages
 - [x] Dark editorial design system (Cormorant Garamond + Lora, parchment textures)
-- [x] Backend tested: 18/18 pytest pass
-- [x] Frontend tested: core flows pass; minor UI sync fixes applied (char locker refresh, Dashboard focus refetch)
+- [x] **SSE streaming**: `/story/generate/stream` + `/story/continue/stream` — token-by-token live render
+- [x] **Auto cover art (Gemini Nano Banana, gemini-3.1-flash-image-preview)** — background task fired after every story creation, polled via `/story/{id}/cover`, regenerable via `/story/{id}/cover/regenerate`
+- [x] **Inline chunk edit**: PATCH `/story/{id}/chunks/{idx}` + Reader hover-pencil UI
+- [x] Library + Community show 3:4 cover thumbnails (lazy-loaded, vibe-gradient fallback)
+- [x] Tested: 28/28 backend pytest; full frontend e2e on preview URL
 
 ## Backlog / Next
-- **P1** Streaming SSE for story generation (token-by-token render)
-- **P1** Inline edit of generated chunks
-- **P1** Story cover art (Nano Banana — could be auto-generated based on vibe + title)
+- **P1** Auto-cancel Claude stream when client disconnects (poll `Request.is_disconnected()` in event_gen) — currently a long stream keeps billing if user closes the tab
+- **P1** Move cover_b64 from MongoDB doc → GridFS or S3 (1MB+ per story bloats `stories` collection)
+- **P2** Per-user rate limit on SSE endpoints (in-memory token bucket)
+- **P2** Refactor `server.py` (~850 lines) into routers: `auth_router.py`, `story_router.py`, `cover_router.py`, `characters_router.py`, `voice_router.py`
 - **P2** Multi-character POV mode
-- **P2** Reading time + listen-to-story (TTS)
+- **P2** Listen-to-story (OpenAI TTS) — pair with our literary prose
 - **P2** Salon: likes, comments, follow other writers
-- **P2** Refactor server.py into routers (auth/story/characters/voice/community)
-- **P2** Server-side word-count enforcement / regenerate if drift
-- **P2** Premium plan / Stripe for unlimited generations
+- **P2** Premium plan / Stripe for unlimited generations + premium cover models
 
 ## Test Credentials
 See `/app/memory/test_credentials.md`

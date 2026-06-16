@@ -70,8 +70,9 @@ export default function Compose() {
 
   const addCharacter = async () => {
     if (!newChar.name || !newChar.description) return;
-    const r = await api.post("/characters", newChar);
-    setCharacters([r.data, ...characters]);
+    await api.post("/characters", newChar);
+    const fresh = await api.get("/characters");
+    setCharacters(fresh.data);
     setNewChar({ name: "", role: "", description: "" });
     setShowCharForm(false);
   };

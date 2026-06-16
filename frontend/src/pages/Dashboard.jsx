@@ -11,9 +11,19 @@ export default function Dashboard() {
   const [chars, setChars] = useState([]);
 
   useEffect(() => {
-    api.get("/prompts/daily").then((r) => setPrompt(r.data));
-    api.get("/story/library").then((r) => setRecent(r.data.slice(0, 4)));
-    api.get("/characters").then((r) => setChars(r.data));
+    const fetchAll = () => {
+      api.get("/prompts/daily").then((r) => setPrompt(r.data)).catch(() => {});
+      api.get("/story/library").then((r) => setRecent(r.data.slice(0, 4))).catch(() => {});
+      api.get("/characters").then((r) => setChars(r.data)).catch(() => {});
+    };
+    fetchAll();
+    const onFocus = () => fetchAll();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
   }, []);
 
   return (
